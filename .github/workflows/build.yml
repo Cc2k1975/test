@@ -1,0 +1,46 @@
+name: Build APK
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build with Buildozer (root + local install)
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ghcr.io/kivy/buildozer:latest
+          options: >
+            -v ${{ github.workspace }}:/home/user/app
+            -w /home/user/app
+            --user root
+            -e HOME=/root
+            -e BUILDOZER_WARN_ON_ROOT=0
+          run: |
+            python3 -m pip install --upgrade pip
+            python3 -m pip install --no-cache-dir "buildozer==1.5.0" "cython<3.0"
+            yes | sdkmanager --licenses || true
+            rm -rf bin || true
+            python3 -m buildozer -v android release
+
+      - name: Show bin contents
+        run: |
+          echo "=== ls -R bin ==="
+          ls -R bin || echo "No bin dir"
+          echo "=== find APKs inside .buildozer tree ==="
+          find . -path "*/outputs/*" -name "*.apk" -print || true
+
+      - name: Upload APK/AAB artifacts (whatever was produced)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-binaries
+          path: |
+            bin/*.apk
+            bin/*-release*.apk
+            .buildozer/android/platform/build-*/dists/*/build/outputs/**/*.apk
+            .buildozer/android/platform/build-*/dists/*/bin/*.apk
+          if-no-files-found: warn
